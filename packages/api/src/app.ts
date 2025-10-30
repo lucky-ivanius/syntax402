@@ -6,6 +6,7 @@ import { requestId } from "hono/request-id";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
 import type { Env } from "./env";
+import reviewHandlers from "./handlers/review";
 import { createPinoLogger } from "./lib/logger";
 import { badRequest, notFound, unauthorized, unexpectedError } from "./utils/response";
 
@@ -29,9 +30,7 @@ app
   .use(requestId())
   .use((c, next) => logger((str) => c.env.LOGGER.info(str))(c, next));
 
-app.basePath("/v1").get("/", async (c) => {
-  return c.text("Hello world!");
-});
+app.basePath("/v1").route("/review", reviewHandlers);
 
 app
   .all("*", async (c) => notFound(c))
