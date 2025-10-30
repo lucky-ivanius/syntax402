@@ -1,0 +1,24 @@
+{
+  "name": "syntax402",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --filter '*' dev",
+    "build": "bun --filter '*' build",
+    "test": "bun --filter '*' test",
+    "format": "biome format --write",
+    "lint": "biome lint",
+    "lint:staged": "biome lint --staged"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.2",
+    "@total-typescript/ts-reset": "^0.6.1",
+    "@types/bun": "^1.3.1",
+    "wrangler": "^4.45.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
