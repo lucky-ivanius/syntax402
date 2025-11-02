@@ -6,14 +6,15 @@ import { requestId } from "hono/request-id";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
 import type { Env } from "./env";
-import reviewHandlers from "./handlers/review";
+import paymentsHandlers from "./handlers/payments";
+import webhookHandlers from "./handlers/webhook";
 import { createPinoLogger } from "./lib/logger";
 import { badRequest, notFound, unauthorized, unexpectedError } from "./utils/response";
 
 const app = new Hono<Env>();
 
 app
-  .use("*", async (c, next) => {
+  .use("*", (c, next) => {
     const logger = createPinoLogger({
       service: "syntax402",
       version: "0.0.1",
@@ -23,14 +24,20 @@ app
 
     c.env.LOGGER = logger;
 
-    next();
+    return next();
   })
   .use(cors())
   .use(trimTrailingSlash())
   .use(requestId())
   .use((c, next) => logger((str) => c.env.LOGGER.info(str))(c, next));
 
-app.basePath("/v1").route("/review", reviewHandlers);
+app
+  /* Set base /v1 path */
+  .basePath("/v1")
+  /* Register payment handlers */
+  .route("/payments", paymentsHandlers)
+  /* Register webhook handlers */
+  .route("/webhook", webhookHandlers);
 
 app
   .all("*", async (c) => notFound(c))
