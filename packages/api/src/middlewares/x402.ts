@@ -38,7 +38,7 @@ const createExactPaymentRequirements = (
 export interface X402PaymentMiddlewareOptions {
   network: Network;
   payTo: string;
-  price: number | (() => Promise<number> | number);
+  price: number;
   description?: string;
   facilitatorConfig?: FacilitatorConfig;
 }
@@ -57,10 +57,6 @@ export const x402PaymentMiddleware = ({
 
     const paymentHeader = c.req.header("X-PAYMENT");
 
-    const paymentRequirements: PaymentRequirements[] = [];
-
-    const _price = typeof price === "function" ? await price() : price;
-
     const currentUrl = c.req.url as Resource;
 
     const paymentKinds = await supported();
@@ -74,7 +70,7 @@ export const x402PaymentMiddleware = ({
 
     const paymentRequirement = createExactPaymentRequirements(
       payTo,
-      _price,
+      price,
       network,
       currentUrl,
       description,
@@ -86,12 +82,12 @@ export const x402PaymentMiddleware = ({
       return unexpectedError(c);
     }
 
-    paymentRequirements.push(paymentRequirement);
+    const paymentRequirements = [paymentRequirement];
 
     if (!paymentHeader)
       return c.html(
         getPaywallHtml({
-          amount: _price,
+          amount: price,
           currentUrl,
           paymentRequirements,
           testnet: true,
