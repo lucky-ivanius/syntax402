@@ -3,16 +3,16 @@
   "name": "api",
   "main": "src/index.ts",
   "compatibility_date": "2025-10-30",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  ]
   // "r2_buckets": [
   //   {
   //     "binding": "MY_BUCKET",
@@ -27,8 +27,9 @@
   //   }
   // ],
   // "ai": {
-  //   "binding": "AI"
-  // },
+  //   "binding": "AI",
+  //   "remote": true
+  // }
   // "observability": {
   //   "enabled": true,
   //   "head_sampling_rate": 1
