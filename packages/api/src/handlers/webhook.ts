@@ -8,7 +8,8 @@ import type { Env } from "../env";
 import type { GithubCodeReviewMetadata } from "../lib/github/metadata";
 import type { CodeReviewRequest, FileChanges } from "../types/code-review";
 import type { Payment } from "../types/payment";
-import { createRandomPriceEstimator } from "../lib/ai/random/price-estimator";
+import { createClaudeSonnet45AiProvider } from "../lib/ai/claude";
+import { createCodeReviewRequestQueryBuilder } from "../lib/query-builder/code-review-request";
 import { badRequest, ok } from "../utils/response";
 
 const webhookHandlers = new Hono<Env>();
@@ -118,9 +119,11 @@ webhookHandlers.post("/github", async (c) => {
         files: fileChanges,
       };
 
-      const reviewPriceEstimator = createRandomPriceEstimator();
+      const queryBuilder = createCodeReviewRequestQueryBuilder();
+      const query = await queryBuilder.build(reviewRequest);
 
-      const price = await reviewPriceEstimator.estimate(reviewRequest);
+      const ai = createClaudeSonnet45AiProvider();
+      const price = await ai.estimatePrice(query);
 
       const id = v7();
 
@@ -133,7 +136,6 @@ webhookHandlers.post("/github", async (c) => {
 
       const payment: Payment<GithubCodeReviewMetadata> = {
         id,
-        reviewRequest,
         price,
         redirectUrl: comment.html_url,
         metadata: {
