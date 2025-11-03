@@ -20,6 +20,7 @@ export type InternalServerError = typeof INTERNAL_SERVER_ERROR;
 export type HttpError =
   | BadRequestError
   | UnauthorizedError
+  | PaymentRequiredError
   | ForbiddenError
   | NotFoundError
   | MethodNotAllowedError
