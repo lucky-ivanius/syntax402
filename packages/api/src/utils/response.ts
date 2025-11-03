@@ -88,7 +88,7 @@ export const methodNotAllowed = <TContext extends Context, TError extends string
 
 export const unexpectedError = <TContext extends Context>(c: TContext) =>
   c.json<ErrorResponse<typeof INTERNAL_SERVER_ERROR>>(
-    { error: INTERNAL_SERVER_ERROR, message: "Unexpected error occured" },
+    { error: INTERNAL_SERVER_ERROR, message: "Unexpected error occurred" },
     500
   );
 
