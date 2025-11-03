@@ -60,9 +60,6 @@ webhookHandlers.post("/github", async (c) => {
       const { data: prData } = getPullRequest;
 
       if (body.includes("/done")) {
-        const commitStatus = await c.env.KV.get(`review:${prData.head.sha}:commit_status_id`);
-        if (!commitStatus) return ok(c);
-
         await octokit.rest.repos.createCommitStatus({
           owner,
           repo,
