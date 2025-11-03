@@ -40,6 +40,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+.wrangler
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
@@ -68,7 +69,10 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.*
+.env.production
+.dev.vars
 !.env.example
+
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -137,3 +141,6 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# misc
+.DS_Store
