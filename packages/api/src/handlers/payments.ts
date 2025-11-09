@@ -1,56 +1,63 @@
 import type { Network } from "x402/types";
-import { createFacilitatorConfig } from "@coinbase/x402";
 import { Hono } from "hono";
-import { App } from "octokit";
 
-import type { Env } from "../env";
-import type { GithubCodeReviewMetadata } from "../lib/github/metadata";
+import type { CodeReview } from "../types/code-review";
 import type { Payment } from "../types/payment";
+import { claudeSonnet45Reviewer, coinbaseFacilitator, githubApp, redis } from "../containers";
+import { env } from "../env";
 import { x402PaymentMiddleware } from "../middlewares/x402";
 import { notFound, ok, unauthorized } from "../utils/response";
+import { deserialize } from "../utils/serializer";
+import { shortenString } from "../utils/strings";
 
-const paymentsHandlers = new Hono<
-  Env<{
-    payment: Payment<GithubCodeReviewMetadata>;
-  }>
->();
+const paymentsHandlers = new Hono();
+
+interface PaymentEnv {
+  Variables: {
+    payment: Payment<CodeReview>;
+  };
+}
 
 paymentsHandlers.get(
   "/:paymentId",
-  async (c, next) => {
-    const { paymentId } = c.req.param();
+  x402PaymentMiddleware<PaymentEnv>(async (c) => {
+    const paymentId = c.req.param("paymentId");
 
-    const existingPayment = await c.env.KV.get(`payment:${paymentId}`);
-    if (!existingPayment) return notFound(c, { error: "payment_not_found", message: "Payment not found" });
+    const paymentBuffer = await redis.get(`payment:${paymentId}`);
+    if (!paymentBuffer) return notFound(c, { error: "payment_not_found", message: "Payment not found" });
 
-    const payment = JSON.parse(existingPayment) as Payment<GithubCodeReviewMetadata>;
+    const payment = deserialize<Payment<CodeReview>>(paymentBuffer);
 
     c.set("payment", payment);
 
-    return next();
-  },
-  async (c, next) =>
-    x402PaymentMiddleware({
-      network: c.env.NETWORK as Network,
-      payTo: c.env.RECIPIENT_WALLET_ADDRESS,
-      price: c.var.payment.price,
-      facilitatorConfig:
-        c.env.ENV === "production"
-          ? createFacilitatorConfig(c.env.CDP_API_KEY_ID, c.env.CDP_API_KEY_SECRET)
-          : undefined,
-    })(c, next),
-  async (c) => {
-    const app = new App({
-      appId: c.env.GITHUB_APP_ID,
-      privateKey: c.env.GITHUB_APP_PRIVATE_KEY,
-      webhooks: {
-        secret: c.env.GITHUB_WEBHOOK_SECRET,
+    return {
+      network: env.NETWORK as Network,
+      payTo: env.RECIPIENT_WALLET_ADDRESS,
+      facilitatorConfig: env.NODE_ENV === "production" ? coinbaseFacilitator : undefined,
+      price: payment.price,
+      description: payment.description,
+      onSettlement: async (settlement) => {
+        if (!payment.externalId) return;
+
+        const { userId, owner, repo } = c.var.payment.metadata;
+
+        const octokit = await githubApp.getInstallationOctokit(Number(userId));
+        if (!octokit) return;
+
+        await octokit.rest.issues.updateComment({
+          owner,
+          repo,
+          comment_id: Number(payment.externalId),
+          body: `# syntax402 - Review Request\n\n**Payment ID:** ${c.var.payment.id}\n**Status:** Paid ✅\n**Tx hash:** [${shortenString(settlement.transaction)}](https://solscan.io/tx/${settlement.transaction}${env.NODE_ENV === "development" ? "?cluster=devnet" : ""})`,
+        });
       },
-    });
+    };
+  }),
+  async (c) => {
+    const codeReview = c.var.payment.metadata;
+    const { userId, owner, repo, sha, pr } = codeReview;
 
-    const { installationId, owner, repo, sha } = c.var.payment.metadata;
-
-    const octokit = await app.getInstallationOctokit(installationId);
+    const octokit = await githubApp.getInstallationOctokit(Number(userId));
     if (!octokit) return unauthorized(c, { error: "github_app_not_installed", message: "GitHub app not installed" });
 
     await octokit.rest.repos.createCommitStatus({
@@ -63,7 +70,27 @@ paymentsHandlers.get(
       operationName: "syntax402/review",
     });
 
-    await c.env.KV.delete(`payment:${c.var.payment.id}`);
+    claudeSonnet45Reviewer.start(codeReview, async (result) => {
+      await octokit.rest.repos.createCommitStatus({
+        owner,
+        repo,
+        sha,
+        state: "success",
+        context: "syntax402/review",
+        description: "PR Reviewed",
+        operationName: "syntax402/review",
+      });
+
+      await octokit.rest.pulls.createReview({
+        owner,
+        repo,
+        pull_number: pr,
+        body: result.comment,
+        event: "COMMENT",
+      });
+    });
+
+    await redis.del(`payment:${c.var.payment.id}`);
 
     return ok(c);
   }
