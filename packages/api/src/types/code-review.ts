@@ -7,12 +7,8 @@ export type FileChanges = {
   [filename: string]: FilePatch;
 };
 
-export interface CodeReviewRequest {
+export interface ReviewRequest {
   files: FileChanges;
-  style?: string[];
-  focus?: string[];
-  includes?: string[];
-  excludes?: string[];
   context?: string;
 }
 
@@ -25,7 +21,17 @@ export type FileComments = {
   [filename: string]: InlineComment[];
 };
 
-export interface CodeReviewResult {
+export interface ReviewResult {
   files: FileComments;
   comment: string;
+}
+
+export interface CodeReview {
+  userId: string;
+  owner: string;
+  repo: string;
+  pr: number;
+  sha: string;
+  reviewRequest: ReviewRequest;
+  prompt: string;
 }

@@ -5,7 +5,7 @@ export interface AiPrice {
 
 export interface AiProvider<TName extends string = string> {
   name: TName;
-  pricePer1m: AiPrice;
-
+  pricePer1M: AiPrice;
+  countTokens: (text: string) => number;
   query: (input: string) => Promise<string>;
 }
