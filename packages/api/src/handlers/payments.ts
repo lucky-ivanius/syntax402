@@ -102,9 +102,9 @@ paymentsHandlers.get(
         body: result.comment,
         event: "COMMENT",
       });
-    });
 
-    await redis.del(`payment:${c.var.payment.id}`);
+      await redis.del(`payment:${c.var.payment.id}`);
+    });
 
     return ok(c);
   }
