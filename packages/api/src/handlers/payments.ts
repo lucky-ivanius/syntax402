@@ -85,6 +85,20 @@ paymentsHandlers.get(
         owner,
         repo,
         pull_number: pr,
+        comments: Object.entries(result.files ?? {}).reduce(
+          (acc, [filename, comments]) => {
+            comments.forEach((comment) => {
+              acc.push({
+                path: filename,
+                body: comment.comment,
+                position: comment.position,
+              });
+            });
+
+            return acc;
+          },
+          [] as { path: string; body: string; position: number }[]
+        ),
         body: result.comment,
         event: "COMMENT",
       });
