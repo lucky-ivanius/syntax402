@@ -43,7 +43,7 @@ export interface X402PaymentContext {
   network: Network;
   payTo: string;
   facilitatorConfig?: FacilitatorConfig;
-  onSettlement?: (settlement: SettleResponse) => void;
+  onSettlement?: (settlement: SettleResponse) => void | Promise<void>;
 }
 
 export type X402PaymentSetContextFn<TEnv extends Env> = <TContext extends Context<TEnv>>(
@@ -114,11 +114,11 @@ export const x402PaymentMiddleware = <TEnv extends Env>(setContext: X402PaymentS
     const settlement = await settle(decoded, matchingPaymentRequirements);
     if (!settlement.success) return paymentRequired(c, { message: "x402 payment is invalid" });
 
-    if (onSettlement) onSettlement(settlement);
-
     const paymentResponseHeader = settleResponseHeader(settlement);
 
     c.header("X-PAYMENT-RESPONSE", paymentResponseHeader);
+
+    if (onSettlement) await onSettlement(settlement);
 
     return c.res;
   });
