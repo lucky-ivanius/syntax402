@@ -1,5 +1,6 @@
 import type { EmitterWebhookEventName } from "@octokit/webhooks";
 import type { IssueCommentEvent } from "@octokit/webhooks-types";
+import { addSeconds, formatDistanceToNow } from "date-fns";
 import { Hono } from "hono";
 import { v7 } from "uuid";
 
@@ -109,11 +110,14 @@ webhookHandlers.post("/github", async (c) => {
 
       const id = v7();
 
+      const expiresAt = addSeconds(new Date(), env.PAYMENT_EXPIRY_SECONDS);
+      const expiresIn = formatDistanceToNow(expiresAt, { addSuffix: true });
+
       const requestPaymentComment = await octokit.rest.issues.createComment({
         owner,
         repo,
         issue_number: pr,
-        body: `# syntax402 - Review Request\n**Payment ID:** ${id}\n**Cost:** $${price} USDC\n\n**Pay:** ${env.PAYWALL_URL}/${id}`,
+        body: `# syntax402 - Review Request\n**Payment ID:** ${id}\n**Cost:** $${price} USDC\n**Expires:** ${expiresIn}\n\n**Pay:** ${env.PAYWALL_URL}/${id}`,
       });
 
       const payment: Payment<CodeReview> = {
