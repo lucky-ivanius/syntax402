@@ -8,6 +8,8 @@ export type FileChanges = {
 };
 
 export interface ReviewRequest {
+  title: string;
+  description: string | null;
   files: FileChanges;
   context?: string;
 }
