@@ -5,9 +5,11 @@ import { v7 } from "uuid";
 
 import type { CodeReview, FileChanges, ReviewRequest } from "../types/code-review";
 import type { Payment } from "../types/payment";
+import { IGNORE_PATTERNS } from "../consts/code-review";
 import { claudeSonnet45Reviewer, githubApp, redis } from "../containers";
 import { env } from "../env";
 import { buildCodeReviewRequestQueryPrompt } from "../lib/prompt/code-review";
+import { checkFile } from "../utils/file-filter";
 import { badRequest, ok } from "../utils/response";
 import { serialize } from "../utils/serializer";
 
@@ -38,6 +40,9 @@ webhookHandlers.post("/github", async (c) => {
 
       const { body } = comment;
 
+      if (!body.includes("/review")) return ok(c);
+      const [, context] = body.split("/review");
+
       const {
         owner: { login: owner },
         name: repo,
@@ -50,10 +55,6 @@ webhookHandlers.post("/github", async (c) => {
       });
 
       const { data: prData } = getPullRequest;
-
-      if (!body.includes("/review")) return ok(c);
-
-      const [, context] = body.split("/review");
 
       const compareCommits = await octokit.rest.repos.compareCommits({
         owner,
@@ -75,15 +76,30 @@ webhookHandlers.post("/github", async (c) => {
       }
 
       const fileChanges: FileChanges = comparison.files.reduce((acc, file) => {
-        acc[file.filename] = {
-          status: file.status,
-          patch: file.patch,
-        };
+        if (checkFile(file.filename, IGNORE_PATTERNS)) {
+          acc[file.filename] = {
+            status: file.status,
+            patch: file.patch,
+          };
+        }
 
         return acc;
       }, {} as FileChanges);
 
+      if (Object.keys(fileChanges).length === 0) {
+        await octokit.rest.issues.createComment({
+          owner,
+          repo,
+          issue_number: pr,
+          body: `# syntax402 - Review Request\n\nNo reviewable files found. All changed files are ignored (e.g., lock files, generated files, binaries).`,
+        });
+
+        return ok(c);
+      }
+
       const reviewRequest: ReviewRequest = {
+        title: prData.title,
+        description: prData.body,
         files: fileChanges,
         context: context.trim(),
       };
