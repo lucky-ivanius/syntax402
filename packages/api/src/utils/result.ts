@@ -17,15 +17,9 @@ export function ok<T>(data: T): SuccessResult<T>;
 export function ok(): SuccessResult<void>;
 
 export function ok<T>(data?: T): SuccessResult<T> {
-  if (!data)
-    return {
-      success: true,
-      data: undefined as T,
-    };
-
   return {
     success: true,
-    data,
+    data: data as T,
   };
 }
 
