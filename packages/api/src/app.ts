@@ -1,14 +1,10 @@
 import type { HTTPResponseError } from "hono/types";
-import type { SolanaAddress } from "x402-hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger as honoLogger } from "hono/logger";
 import { requestId } from "hono/request-id";
 import { trimTrailingSlash } from "hono/trailing-slash";
-import { decodePayment } from "x402/schemes";
-import { paymentMiddleware } from "x402-hono";
 
-import { env } from "./env";
 import paymentsHandlers from "./handlers/payments";
 import webhookHandlers from "./handlers/webhook";
 import { logger } from "./logger";

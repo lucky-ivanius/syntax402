@@ -8,8 +8,8 @@ export const server = Bun.serve({
 });
 logger.info({ url: server.url }, `Application started!`);
 
-export const stop = () => {
-  server.stop();
+export const stop = async () => {
+  await server.stop();
   process.exit(0);
 };
 
