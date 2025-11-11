@@ -9,6 +9,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@syntax402/utils": "workspace:*",
     "@ai-sdk/anthropic": "^2.0.44",
     "@anthropic-ai/tokenizer": "^0.0.4",
     "@coinbase/x402": "^0.7.1",
