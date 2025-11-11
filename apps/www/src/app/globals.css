@@ -1,0 +1,7 @@
+@import "@syntax402/ui";
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+}
