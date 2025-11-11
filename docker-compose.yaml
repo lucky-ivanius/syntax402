@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  valkey:
+    image: valkey/valkey:8.0.1-alpine
+    container_name: syntax402-valkey
+    ports:
+      - 6379:6379
+    volumes:
+      - valkey_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - syntax402-network
+
+volumes:
+  valkey_data:
+
+networks:
+  syntax402-network:
+    driver: bridge

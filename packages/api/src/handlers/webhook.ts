@@ -1,28 +1,22 @@
 import type { EmitterWebhookEventName } from "@octokit/webhooks";
 import type { IssueCommentEvent } from "@octokit/webhooks-types";
+import { addSeconds, formatDistanceToNow } from "date-fns";
 import { Hono } from "hono";
-import { App } from "octokit";
 import { v7 } from "uuid";
 
-import type { Env } from "../env";
-import type { GithubCodeReviewMetadata } from "../lib/github/metadata";
-import type { CodeReviewRequest, FileChanges } from "../types/code-review";
+import type { CodeReview, FileChanges, ReviewRequest } from "../types/code-review";
 import type { Payment } from "../types/payment";
-import { createClaudeSonnet45AiProvider } from "../lib/ai/claude";
-import { createCodeReviewRequestQueryBuilder } from "../lib/query-builder/code-review-request";
+import { IGNORE_PATTERNS } from "../consts/code-review";
+import { claudeSonnet45Reviewer, githubApp, redis } from "../containers";
+import { env } from "../env";
+import { buildCodeReviewRequestQueryPrompt } from "../lib/prompt/code-review";
+import { checkFile } from "../utils/file-filter";
 import { badRequest, ok } from "../utils/response";
+import { serialize } from "../utils/serializer";
 
-const webhookHandlers = new Hono<Env>();
+const webhookHandlers = new Hono();
 
 webhookHandlers.post("/github", async (c) => {
-  const app = new App({
-    appId: c.env.GITHUB_APP_ID,
-    privateKey: c.env.GITHUB_APP_PRIVATE_KEY,
-    webhooks: {
-      secret: c.env.GITHUB_WEBHOOK_SECRET,
-    },
-  });
-
   const event = c.req.header("X-GitHub-Event");
   if (!event) return badRequest(c, { error: "missing_github_event", message: "Invalid/missing event" });
 
@@ -30,7 +24,7 @@ webhookHandlers.post("/github", async (c) => {
   const signature = c.req.header("X-Hub-Signature-256");
   if (!signature) return badRequest(c, { error: "missing_github_signature", message: "Invalid/missing signature" });
 
-  const isValid = await app.webhooks.verify(eventPayload, signature);
+  const isValid = await githubApp.webhooks.verify(eventPayload, signature);
   if (!isValid) return badRequest(c, { error: "invalid_github_event", message: "Invalid/missing event" });
 
   switch (event as EmitterWebhookEventName) {
@@ -38,7 +32,7 @@ webhookHandlers.post("/github", async (c) => {
       const { action, issue, repository, comment, installation } = JSON.parse(eventPayload) as IssueCommentEvent;
       if (!installation) return ok(c);
 
-      const octokit = await app.getInstallationOctokit(installation.id);
+      const octokit = await githubApp.getInstallationOctokit(installation.id);
 
       if (action !== "created") return ok(c);
 
@@ -46,6 +40,9 @@ webhookHandlers.post("/github", async (c) => {
       if (!pull_request) return ok(c);
 
       const { body } = comment;
+
+      if (!body.includes("/review")) return ok(c);
+      const [, context] = body.split("/review");
 
       const {
         owner: { login: owner },
@@ -60,29 +57,6 @@ webhookHandlers.post("/github", async (c) => {
 
       const { data: prData } = getPullRequest;
 
-      if (body.includes("/done")) {
-        await octokit.rest.repos.createCommitStatus({
-          owner,
-          repo,
-          sha: prData.head.sha,
-          state: "success",
-          context: "syntax402/review",
-          description: "PR Reviewed",
-          operationName: "syntax402/review",
-        });
-
-        await octokit.rest.pulls.createReview({
-          owner,
-          repo,
-          pull_number: pr,
-          body: "LGTM 👍",
-          event: "COMMENT",
-        });
-
-        return ok(c);
-      }
-      if (!body.includes("/review")) return ok(c);
-
       const compareCommits = await octokit.rest.repos.compareCommits({
         owner,
         repo,
@@ -91,20 +65,7 @@ webhookHandlers.post("/github", async (c) => {
       });
 
       const { data: comparison } = compareCommits;
-
-      if (!comparison.files?.length) return ok(c);
-
-      const fileChanges: FileChanges = comparison.files.reduce((acc, file) => {
-        acc[file.filename] = {
-          status: file.status,
-          patch: file.patch,
-        };
-
-        return acc;
-      }, {} as FileChanges);
-
-      const fileNames = Object.keys(fileChanges);
-      if (!fileNames.length) {
+      if (!comparison.files?.length) {
         await octokit.rest.issues.createComment({
           owner,
           repo,
@@ -115,42 +76,68 @@ webhookHandlers.post("/github", async (c) => {
         return ok(c);
       }
 
-      const reviewRequest: CodeReviewRequest = {
+      const fileChanges: FileChanges = comparison.files.reduce((acc, file) => {
+        if (checkFile(file.filename, IGNORE_PATTERNS)) {
+          acc[file.filename] = {
+            status: file.status,
+            patch: file.patch,
+          };
+        }
+
+        return acc;
+      }, {} as FileChanges);
+
+      if (Object.keys(fileChanges).length === 0) {
+        await octokit.rest.issues.createComment({
+          owner,
+          repo,
+          issue_number: pr,
+          body: `# syntax402 - Review Request\n\nNo reviewable files found. All changed files are ignored (e.g., lock files, generated files, binaries).`,
+        });
+
+        return ok(c);
+      }
+
+      const reviewRequest: ReviewRequest = {
+        title: prData.title,
+        description: prData.body,
         files: fileChanges,
+        context: context.trim(),
       };
 
-      const queryBuilder = createCodeReviewRequestQueryBuilder();
-      const query = await queryBuilder.build(reviewRequest);
-
-      const ai = createClaudeSonnet45AiProvider();
-      const price = await ai.estimatePrice(query);
+      const prompt = buildCodeReviewRequestQueryPrompt(reviewRequest);
+      const price = claudeSonnet45Reviewer.getPrice(reviewRequest);
 
       const id = v7();
 
-      const paymentComment = await octokit.rest.issues.createComment({
+      const expiresAt = addSeconds(new Date(), env.PAYMENT_EXPIRY_SECONDS);
+      const expiresIn = formatDistanceToNow(expiresAt, { addSuffix: true });
+
+      const requestPaymentComment = await octokit.rest.issues.createComment({
         owner,
         repo,
         issue_number: pr,
-        body: `# syntax402 - Review Request\n**Files:** ${fileNames.length} file(s)\n**Cost:** $${price} USDC\n\n**Pay:** ${c.env.PAYWALL_URL}/${id}`,
+        body: `# syntax402 - Review Request\n**Payment ID:** ${id}\n**Cost:** $${price} USDC\n**Expires:** ${expiresIn}\n\n**Pay:** ${env.PAYWALL_URL}/${id}`,
       });
 
-      const payment: Payment<GithubCodeReviewMetadata> = {
+      const payment: Payment<CodeReview> = {
         id,
+        externalId: requestPaymentComment.data.id.toString(),
         price,
+        description: `syntax402 - Code Review Request - ${id}`,
         redirectUrl: comment.html_url,
         metadata: {
-          installationId: installation.id,
+          userId: installation.id.toString(),
           owner,
           repo,
           pr,
           sha: prData.head.sha,
-          paymentCommentId: paymentComment.data.id,
+          reviewRequest,
+          prompt,
         },
       };
 
-      await c.env.KV.put(`payment:${id}`, JSON.stringify(payment), {
-        expirationTtl: parseInt(c.env.PAYMENT_EXPIRY_SECONDS, 10),
-      });
+      await redis.setEx(`payment:${id}`, env.PAYMENT_EXPIRY_SECONDS, serialize(payment));
 
       return ok(c);
     }

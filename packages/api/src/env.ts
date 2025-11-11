@@ -1,8 +1,24 @@
-import type { Env as HonoEnv } from "hono";
+import z from "zod";
 
-import type { WithPinoLogger } from "./lib/logger";
+export const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "production"]).default("development"),
+  PORT: z.coerce.number().int().min(0).max(65535).default(8080),
 
-export interface Env<TVariables extends object | undefined = undefined> extends HonoEnv {
-  Bindings: CloudflareBindings & WithPinoLogger;
-  Variables: TVariables;
-}
+  REDIS_URL: z.url({ protocol: /^rediss?$/ }),
+
+  PAYWALL_URL: z.url({ protocol: /^https?$/ }),
+  PAYMENT_EXPIRY_SECONDS: z.coerce.number().int().min(0).default(300),
+
+  NETWORK: z.enum(["solana-devnet", "solana-mainnet"]),
+  RECIPIENT_WALLET_ADDRESS: z.string(),
+
+  CDP_API_KEY_ID: z.string(),
+  CDP_API_KEY_SECRET: z.string(),
+
+  GITHUB_APP_ID: z.string(),
+  GITHUB_APP_PRIVATE_KEY: z.string(),
+
+  GITHUB_WEBHOOK_SECRET: z.string(),
+});
+
+export const env = envSchema.parse(process.env);

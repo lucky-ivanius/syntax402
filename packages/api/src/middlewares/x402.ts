@@ -1,4 +1,5 @@
-import type { FacilitatorConfig, Network, PaymentRequirements, Price, Resource } from "x402/types";
+import type { Context, Env } from "hono";
+import type { FacilitatorConfig, Network, PaymentRequirements, Price, Resource, SettleResponse } from "x402/types";
 import { createMiddleware } from "hono/factory";
 import { getPaywallHtml } from "x402/paywall";
 import { decodePayment } from "x402/schemes";
@@ -6,6 +7,7 @@ import { findMatchingPaymentRequirements, processPriceToAtomicAmount } from "x40
 import { settleResponseHeader } from "x402/types";
 import { useFacilitator } from "x402/verify";
 
+import { logger } from "../logger";
 import { paymentRequired, unexpectedError } from "../utils/response";
 
 const createExactPaymentRequirements = (
@@ -35,23 +37,25 @@ const createExactPaymentRequirements = (
   };
 };
 
-export interface X402PaymentMiddlewareOptions {
-  network: Network;
-  payTo: string;
+export interface X402PaymentContext {
   price: number;
   description?: string;
+  network: Network;
+  payTo: string;
   facilitatorConfig?: FacilitatorConfig;
+  onSettlement?: (settlement: SettleResponse) => void | Promise<void>;
 }
 
-export const x402PaymentMiddleware = ({
-  network,
-  payTo,
-  price,
-  facilitatorConfig,
-  description = "",
-}: X402PaymentMiddlewareOptions) =>
-  createMiddleware(async (c, next) => {
-    const logger = c.env.LOGGER;
+export type X402PaymentSetContextFn<TEnv extends Env> = <TContext extends Context<TEnv>>(
+  c: TContext
+) => Promise<X402PaymentContext | Response>;
+
+export const x402PaymentMiddleware = <TEnv extends Env>(setContext: X402PaymentSetContextFn<TEnv>) =>
+  createMiddleware<TEnv>(async (c, next) => {
+    const paymentContext = await setContext(c);
+    if (paymentContext instanceof Response) return paymentContext;
+
+    const { price, network, payTo, facilitatorConfig, description = "", onSettlement } = paymentContext;
 
     const { verify, settle, supported } = useFacilitator(facilitatorConfig);
 
@@ -113,6 +117,8 @@ export const x402PaymentMiddleware = ({
     const paymentResponseHeader = settleResponseHeader(settlement);
 
     c.header("X-PAYMENT-RESPONSE", paymentResponseHeader);
+
+    if (onSettlement) await onSettlement(settlement);
 
     return c.res;
   });

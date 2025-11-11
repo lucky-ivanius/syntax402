@@ -1,35 +1,22 @@
 import type { HTTPResponseError } from "hono/types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import { logger as honoLogger } from "hono/logger";
 import { requestId } from "hono/request-id";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
-import type { Env } from "./env";
 import paymentsHandlers from "./handlers/payments";
 import webhookHandlers from "./handlers/webhook";
-import { createPinoLogger } from "./lib/logger";
+import { logger } from "./logger";
 import { badRequest, notFound, unauthorized, unexpectedError } from "./utils/response";
 
-const app = new Hono<Env>();
+const app = new Hono();
 
 app
-  .use("*", (c, next) => {
-    const logger = createPinoLogger({
-      service: "syntax402",
-      version: "0.0.1",
-      environment: c.env.ENV as "development" | "production",
-      level: c.env.ENV === "production" ? "info" : "debug",
-    });
-
-    c.env.LOGGER = logger;
-
-    return next();
-  })
   .use(cors())
   .use(trimTrailingSlash())
   .use(requestId())
-  .use((c, next) => logger((str) => c.env.LOGGER.info(str))(c, next));
+  .use(honoLogger((str) => logger.info(str)));
 
 app
   /* Set base /v1 path */
@@ -42,8 +29,6 @@ app
 app
   .all("*", async (c) => notFound(c))
   .onError(async (err, c) => {
-    const logger = c.env.LOGGER;
-
     const error = err as HTTPResponseError;
     if (!error.getResponse) {
       logger.error(err);
