@@ -50,9 +50,9 @@ export default function Hero() {
           {/* CTAs */}
           <motion.div variants={item} className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button asChild size="lg" className="rounded-full px-8 font-semibold">
-              <a href={githubAppInstallationUrl} target="_blank" rel="noopener noreferrer">
+              <Link href={githubAppInstallationUrl} target="_blank" rel="noopener noreferrer">
                 Install GitHub App →
-              </a>
+              </Link>
             </Button>
             <Button variant="secondary" size="lg" className="rounded-full px-8 font-semibold" asChild>
               <Link href="#how-it-works">See How It Works</Link>
