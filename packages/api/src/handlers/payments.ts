@@ -1,13 +1,14 @@
 import type { Network } from "x402/types";
 import { Hono } from "hono";
 
+import { deserialize } from "@syntax402/utils/serializer";
+
 import type { CodeReview } from "../types/code-review";
 import type { Payment } from "../types/payment";
 import { claudeSonnet45Reviewer, coinbaseFacilitator, githubApp, redis } from "../containers";
 import { env } from "../env";
 import { x402PaymentMiddleware } from "../middlewares/x402";
 import { notFound, ok, unauthorized } from "../utils/response";
-import { deserialize } from "../utils/serializer";
 import { shortenString } from "../utils/strings";
 
 const paymentsHandlers = new Hono();

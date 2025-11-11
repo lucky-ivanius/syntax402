@@ -4,6 +4,8 @@ import { addSeconds, formatDistanceToNow } from "date-fns";
 import { Hono } from "hono";
 import { v7 } from "uuid";
 
+import { serialize } from "@syntax402/utils/serializer";
+
 import type { CodeReview, FileChanges, ReviewRequest } from "../types/code-review";
 import type { Payment } from "../types/payment";
 import { IGNORE_PATTERNS } from "../consts/code-review";
@@ -12,7 +14,6 @@ import { env } from "../env";
 import { buildCodeReviewRequestQueryPrompt } from "../lib/prompt/code-review";
 import { checkFile } from "../utils/file-filter";
 import { badRequest, ok } from "../utils/response";
-import { serialize } from "../utils/serializer";
 
 const webhookHandlers = new Hono();
 
