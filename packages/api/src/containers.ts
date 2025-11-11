@@ -26,5 +26,5 @@ export const githubApp = new App({
   },
 });
 
-export const claudeSonnet45 = createClaudeSonnet45AiProvider();
+export const claudeSonnet45 = createClaudeSonnet45AiProvider(env.ANTHROPIC_API_KEY);
 export const claudeSonnet45Reviewer = createClaudeCodeReview(claudeSonnet45);

@@ -16,7 +16,11 @@ export interface ReviewRequest {
 
 export type InlineComment = {
   comment: string;
-  position: number;
+  position?: number;
+  line?: number;
+  side?: "left" | "right";
+  start?: number;
+  startSide?: "left" | "right";
 };
 
 export type FileComments = {

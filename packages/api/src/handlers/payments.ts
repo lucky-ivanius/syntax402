@@ -81,25 +81,40 @@ paymentsHandlers.get(
         operationName: "syntax402/review",
       });
 
+      const comments = Object.entries(result.files ?? {}).reduce(
+        (acc, [filename, comments]) => {
+          comments.forEach((comment) => {
+            acc.push({
+              path: filename,
+              body: comment.comment,
+              position: comment.position,
+              line: comment.line,
+              side: comment.side,
+              start_line: comment.start,
+              start_side: comment.startSide,
+            });
+          });
+
+          return acc;
+        },
+        [] as {
+          path: string;
+          body: string;
+          position?: number;
+          line?: number;
+          side?: "left" | "right";
+          start_line?: number;
+          start_side?: "left" | "right";
+        }[]
+      );
+      const body = result.comment;
+
       await octokit.rest.pulls.createReview({
         owner,
         repo,
         pull_number: pr,
-        comments: Object.entries(result.files ?? {}).reduce(
-          (acc, [filename, comments]) => {
-            comments.forEach((comment) => {
-              acc.push({
-                path: filename,
-                body: comment.comment,
-                position: comment.position,
-              });
-            });
-
-            return acc;
-          },
-          [] as { path: string; body: string; position: number }[]
-        ),
-        body: result.comment,
+        comments,
+        body,
         event: "COMMENT",
       });
 

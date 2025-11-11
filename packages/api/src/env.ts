@@ -19,6 +19,8 @@ export const envSchema = z.object({
   GITHUB_APP_PRIVATE_KEY: z.string(),
 
   GITHUB_WEBHOOK_SECRET: z.string(),
+
+  ANTHROPIC_API_KEY: z.string().startsWith("sk-ant-"),
 });
 
 export const env = envSchema.parse(process.env);
